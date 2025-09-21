@@ -150,9 +150,6 @@ def split_chunks_on_special_tokens(
 def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     '''
     Train a BPE tokenizer on the input data.
-    This initial implementation prepares efficient chunk boundaries and
-    splits text on special tokens prior to pre-tokenization. The actual BPE
-    merge training should be implemented on top of these utilities.
     '''
     # Choose a reasonable number of chunks based on available CPUs
     num_processes = max(1, os.cpu_count() or 1)
