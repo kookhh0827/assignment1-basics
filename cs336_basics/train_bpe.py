@@ -157,7 +157,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
     # Choose a reasonable number of chunks based on available CPUs
     num_processes = max(1, os.cpu_count() or 1)
 
-    # Compute chunk boundaries aligned to special tokens
+    # 1) ===== Compute chunk boundaries aligned to special tokens =====
     special_tokens_bytes = [t.encode("utf-8") for t in special_tokens]
     with open(input_path, "rb") as fbin:
         boundaries = find_chunk_boundaries(fbin, num_processes, special_tokens_bytes)
@@ -173,7 +173,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
     # Compile pre-tokenization pattern string (compiled in workers)
     pretoken_pattern_str = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
 
-    # Parallel pre-tokenization counting per chunk
+    # 2) ===== Parallel pre-tokenization counting per chunk =====
     from collections import Counter
     token_counts: Counter[tuple[bytes, ...]] = Counter()
     if num_processes > 1 and len(segments_per_chunk) > 1:
@@ -197,7 +197,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
                     token_tuple = tuple(bytes([x]) for x in b)
                     token_counts[token_tuple] += 1
 
-    # ----- BPE merge loop -----
+    # 3) ===== BPE merge loop =====
     def compute_pair_counts(tokens_counter: dict[tuple[bytes, ...], int]) -> dict[tuple[bytes, bytes], int]:
         pair_counts_local: dict[tuple[bytes, bytes], int] = {}
         for token_tuple, freq in tokens_counter.items():
@@ -247,7 +247,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
         merges.append(best_pair)
         token_counts = apply_merge(token_counts, best_pair)
 
-    # ----- Build vocabulary -----
+    # 4) ===== Build vocabulary =====
     # Validate capacity: special tokens + 256 byte tokens must fit
     if vocab_size < len(special_tokens) + 256:
         raise ValueError(
@@ -255,16 +255,16 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
         )
     vocab: dict[int, bytes] = {}
     
-    # 1) Special tokens first, in provided order
+    # Special tokens first, in provided order
     for special_index, token_str in enumerate(special_tokens):
         vocab[special_index] = token_str.encode("utf-8")
     
-    # 2) Raw byte tokens next (0..255)
+    # Raw byte tokens next (0..255)
     base_index = len(special_tokens)
     for byte_value in range(256):
         vocab[base_index + byte_value] = bytes([byte_value])
     
-    # 3) Learned merge tokens until we reach vocab_size
+    # Learned merge tokens until we reach vocab_size
     merges_capacity = vocab_size - (base_index + 256)
     num_merges_to_take = min(merges_capacity, len(merges))
     for merge_index in range(num_merges_to_take):
